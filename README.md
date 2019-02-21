@@ -5,9 +5,9 @@ On the average, libnabo is 5% to 20% faster than [ANN].
 
 libnabo depends on [Eigen], a modern C++ matrix and linear-algebra library.
 libnabo works with either version 2 or 3 of Eigen.
-libnabo also depends on [Boost], a C++ general library.
+libnabo also optionally depends on [Boost], a C++ general library, for Python bindings.
 
-libnabo was developed by [Stéphane Magnenat](http://stephane.magnenat.net) as part of his work at [ASL-ETH](http://www.asl.ethz.ch) and is now maintained by [Simon Lynen](http://www.asl.ethz.ch/people/slynen).
+libnabo was developed by [Stéphane Magnenat](http://stephane.magnenat.net) as part of his work at [ASL-ETH](http://www.asl.ethz.ch) and is now maintained by [Simon Lynen](https://github.com/simonlynen).
 
 Download
 ========
@@ -19,10 +19,6 @@ The source code is available from github, you can clone the git tree by doing:
 
 	git clone git://github.com/ethz-asl/libnabo.git
 
-You can then checkout a specific branch, for instance to checkout version 1.0.2, do:
-
-	cd libnabo
-	git checkout 1.0.2
 
 Compilation
 ===========
@@ -34,7 +30,7 @@ You will find a nice introductory tutorial in [this video](http://www.youtube.co
 Prerequisites
 -------------
 
-If your operating system does not provide it, you must get [Eigen] and [Boost].
+If your operating system does not provide it, you must get [Eigen], and [Boost] if you want to build the Python bindings.
 [Eigen] only needs to be downloaded and extracted.
 You also need `grep`, which is available in standard on Linux or Mac OS X, you can get the window version [here](http://gnuwin32.sourceforge.net/packages/grep.htm).
 
@@ -89,7 +85,7 @@ libnabo is easy to use. For example, assuming that you are working with floats a
 	
 	nns->knn(q, indices, dists2, K);
 
-In this example, `M` is an [Eigen] (refering to the software, not to the math) matrix (column major, float) and `q` is an [Eigen] vector (float).
+In this example, `M` is an [Eigen] (refering to the software, not to the math) matrix (column major, float) and `q` is an [Eigen] vector (float). Note that `M` **must stay alive** throughout the use of libnabo, otherwise the results of `knn` are undefined.
 The results `indices` and `dists2` are [Eigen] vectors of indices and squared distances refering to the columns of `M`.
 See `examples/trivial.cpp` for a compilable version of this example, and `examples/usage.cpp` for a slightly more complex example involving multi-point queries.
 
@@ -99,11 +95,22 @@ The main page `doc/html/index.html` contains a detailed overview of the usage of
 Python bindings
 ===============
 
-libnabo includes python bindings that are compiled if python is available.
+libnabo includes python bindings that are compiled if Python is available.
 The resulting module is called pynabo, you can see an example in `python/test.py`.
 You can find more information in the docstring-based documentation:
 
 	python -c "import pynabo; help(pynabo.NearestNeighbourSearch)"
+
+Building
+--------
+
+The Python bindings can be generated for Python 2 or Python 3.
+To specify the version of the interpreter to use when building the bindings, set the `PYTHON_VERSION_MAJOR` and `PYTHON_VERSION_MINOR` variables.
+For example if you have both Python 2.7 and 3.5 installed, you could ask CMake to generate Python 3 bindings by using the following command.
+
+    cmake -DPYTHON_VERSION_MAJOR=3 -DPYTHON_VERSION_MINOR=5 ..
+
+On Debian-based distributions you may also need the `-DPYTHON_DEB_INSTALL_TARGET` option enabled.
 
 Unit testing
 ============

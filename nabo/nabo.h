@@ -41,7 +41,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 #include <vector>
 #include <map>
-#include <boost/any.hpp>
+#include "third_party/any.hpp"
 
 /*! 
 	\file nabo.h
@@ -62,7 +62,6 @@ On the average, libnabo is 5% to 20% faster than \ref ANN.
 
 libnabo depends on \ref Eigen, a modern C++ matrix and linear-algebra library.
 libnabo works with either version 2 or 3 of Eigen.
-libnabo also depends on \ref Boost, a C++ general library.
 
 \section Compilation
 
@@ -72,7 +71,7 @@ You will find a nice introductory tutorial in this you tube video: http://www.yo
 
 \subsection Prerequisites
 
-If your operating system does not provide it, you must get \ref Eigen and \ref Boost.
+If your operating system does not provide it, you must get \ref Eigen.
 \ref Eigen only needs to be downloaded and extracted.
 
 \subsection CompilationOptions Compilation options
@@ -85,15 +84,15 @@ Please read the <a href="http://www.cmake.org/cmake/help/cmake2.6docs.html">CMak
 
 \subsection QuickCompilationUnix Quick compilation and installation under Unix
 
-Under Unix, assuming that \ref Eigen and \ref Boost are installed system-wide, you can compile (with optimisation and debug information) and install libnabo in \c /usr/local with the following commands run in the top-level directory of libnabo's sources:
+Under Unix, assuming that \ref Eigen is installed system-wide, you can compile (with optimisation and debug information) and install libnabo in \c /usr/local with the following commands run in the top-level directory of libnabo's sources:
 \code
 SRC_DIR=`pwd`
 BUILD_DIR=${SRC_DIR}/build
 mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ${SRC_DIR}
-# if Eigen or Boost are not available system-wide, run at that point: 
+# if Eigen is not available system-wide, run at that point:
 #   cmake-gui .
-# cmake-gui allows you to tell the location of Eigen or Boost
+# cmake-gui allows you to tell the location of Eigen
 make
 sudo make install
 \endcode
@@ -101,7 +100,7 @@ sudo make install
 These lines will compile libnabo in a \c build sub-directory and therefore keep your source tree clean.
 Note that you could compile libnabo anywhere you have write access, such as in \c /tmp/libnabo.
 This out-of-source build is a nice feature of \ref CMake.
-If \ref Eigen or \ref Boost are not installed system-wide, you might have to tell \ref CMake where to find them (using \c ccmake or \c cmake-gui).
+If \ref Eigen is not installed system-wide, you might have to tell \ref CMake where to find them (using \c ccmake or \c cmake-gui).
 
 You can generate the documentation by typing:
 \code
@@ -192,14 +191,13 @@ libnabo differs from \ref ANN on the following points:
 
 * performances
 - about 5% to 20% faster than ANN (both -O3 -NDEBUG), probably due to the smaller memory footprint
-- clearly memory-bound, neither OpenMP nor boost::thread improve performances 
+- clearly memory-bound, neither OpenMP nor std::thread improve performances 
 
 \section References
 
 \li \anchor Eigen Eigen: http://eigen.tuxfamily.org
 \li \anchor ANN ANN: http://www.cs.umd.edu/~mount/ANN
 \li \anchor CMake CMake: http://www.cmake.org
-\li \anchor Boost Boost: http://www.boost.org
 
 */
 
@@ -210,12 +208,27 @@ namespace Nabo
 	//@{
 	
 	//! version of the Nabo library as string
-	#define NABO_VERSION "1.0.6"
+	#define NABO_VERSION "1.0.7"
 	//! version of the Nabo library as an int
-	#define NABO_VERSION_INT 10006
-	
+	#define NABO_VERSION_INT 10007
+
+	// TODO (c++14) Convert invalidIndex, invalidValue to constexpr templated variables.
+	template <typename IndexType>
+	inline constexpr IndexType invalidIndex() {
+		static_assert(std::is_integral<IndexType>::value, "");
+		return std::is_unsigned<IndexType>::value ? std::numeric_limits<IndexType>::max() : IndexType(-1);
+	}
+
+	template <typename ValueType>
+	inline constexpr ValueType invalidValue() {
+		static_assert(std::is_floating_point<ValueType>::value, "");
+		return std::numeric_limits<ValueType>::infinity();
+	}
+
 	//! Parameter vector
-	struct Parameters: public std::map<std::string, boost::any>
+	//
+	// TODO: replace with C++17 std::any.
+	struct Parameters: public std::map<std::string, linb::any>
 	{
 		//! Create an empty parameter vector
 		Parameters(){}
@@ -223,7 +236,7 @@ namespace Nabo
 		/** \param key entry key
 		 * \param value entry value
 		 */
-		Parameters(const std::string& key, const boost::any& value){(*this)[key] = value;}
+		Parameters(const std::string& key, const linb::any& value){(*this)[key] = value;}
 		//! Get the value of a key, return defaultValue if the key does not exist
 		/** \param key requested key
 		 * \param defaultValue value to return if the key does not exist
@@ -234,20 +247,22 @@ namespace Nabo
 		{
 			const_iterator it(find(key));
 			if (it != end())
-				return boost::any_cast<T>(it->second);
+				return linb::any_cast<T>(it->second);
 			else
 				return defaultValue;
 		}
 	};
 	
 	//! Nearest neighbour search interface, templatized on scalar type
-	template<typename T>
+	template<typename T, typename Cloud_T = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> >
 	struct NearestNeighbourSearch
 	{
 		//! an Eigen vector of type T, to hold the coordinates of a point
 		typedef typename Eigen::Matrix<T, Eigen::Dynamic, 1> Vector; 
 		//! a column-major Eigen matrix in which each column is a point; this matrix has dim rows
 		typedef typename Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> Matrix;
+		//! a column-major Eigen matrix in which each column is a point; this matrix has dim rows
+		typedef Cloud_T CloudType;
 		//! an index to a Vector or a Matrix, for refering to data points
 		typedef int Index;
 		//! a vector of indices to data points
@@ -256,7 +271,7 @@ namespace Nabo
 		typedef typename Eigen::Matrix<Index, Eigen::Dynamic, Eigen::Dynamic> IndexMatrix;
 		
 		//! the reference to the data-point cloud, which must remain valid during the lifetime of the NearestNeighbourSearch object
-		const Matrix& cloud;
+		const CloudType& cloud;
 		//! the dimensionality of the data-point cloud
 		const Index dim;
 		//! creation options
@@ -265,7 +280,12 @@ namespace Nabo
 		const Vector minBound;
 		//! the high bound of the search space (axis-aligned bounding box)
 		const Vector maxBound;
-		
+
+		//! the invalid index
+		static constexpr Index InvalidIndex = invalidIndex<Index>();
+		//! the invalid value
+		static constexpr T InvalidValue = invalidValue<T>();
+
 		//! type of search
 		enum SearchType
 		{
@@ -292,7 +312,7 @@ namespace Nabo
 		};
 		
 		//! Find the k nearest neighbours of query
-		/*!	If the search finds less than k points, the empty entries in dists2 will be filled with infinity and the indices with 0. If you must query more than one point at once, use the version of the knn() function taking matrices as input, because it is much faster.
+		/*!	If the search finds less than k points, the empty entries in dists2 will be filled with InvalidValue and the indices with InvalidIndex. If you must query more than one point at once, use the version of the knn() function taking matrices as input, because it is much faster.
 		 *	\param query query point
 		 *	\param indices indices of nearest neighbours, must be of size k
 		 *	\param dists2 squared distances to nearest neighbours, must be of size k
@@ -305,7 +325,7 @@ namespace Nabo
 		unsigned long knn(const Vector& query, IndexVector& indices, Vector& dists2, const Index k = 1, const T epsilon = 0, const unsigned optionFlags = 0, const T maxRadius = std::numeric_limits<T>::infinity()) const;
 		
 		//! Find the k nearest neighbours for each point of query
-		/*!	If the search finds less than k points, the empty entries in dists2 will be filled with infinity and the indices with 0.
+		/*!	If the search finds less than k points, the empty entries in dists2 will be filled with InvalidValue and the indices with InvalidIndex.
 		 *	\param query query points
 		 *	\param indices indices of nearest neighbours, must be of size k x query.cols()
 		 *	\param dists2 squared distances to nearest neighbours, must be of size k x query.cols() 
@@ -318,7 +338,7 @@ namespace Nabo
 		virtual unsigned long knn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, const Index k = 1, const T epsilon = 0, const unsigned optionFlags = 0, const T maxRadius = std::numeric_limits<T>::infinity()) const = 0;
 		
 		//! Find the k nearest neighbours for each point of query
-		/*!	If the search finds less than k points, the empty entries in dists2 will be filled with infinity and the indices with 0.
+		/*!	If the search finds less than k points, the empty entries in dists2 will be filled with InvalidValue and the indices with InvalidIndex.
 		 *	\param query query points
 		 *	\param indices indices of nearest neighbours, must be of size k x query.cols()
 		 *	\param dists2 squared distances to nearest neighbours, must be of size k x query.cols() 
@@ -337,7 +357,7 @@ namespace Nabo
 		 *	\param creationOptionFlags creation options, a bitwise OR of elements of CreationOptionFlags
 		 *	\param additionalParameters additional parameters, currently only useful for KDTREE_
 		 *	\return an object on which to run nearest neighbour queries */
-		static NearestNeighbourSearch* create(const Matrix& cloud, const Index dim = std::numeric_limits<Index>::max(), const SearchType preferedType = KDTREE_LINEAR_HEAP, const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters());
+		static NearestNeighbourSearch* create(const CloudType& cloud, const Index dim = std::numeric_limits<Index>::max(), const SearchType preferedType = KDTREE_LINEAR_HEAP, const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters());
 		
 		//! Create a nearest-neighbour search, using brute-force search, useful for comparison only
 		/*!	This is an helper function, you can also use create() with BRUTE_FORCE as preferedType
@@ -345,7 +365,7 @@ namespace Nabo
 		 *	\param dim number of dimensions to consider, must be lower or equal to cloud.rows()
 		 *	\param creationOptionFlags creation options, a bitwise OR of elements of CreationOptionFlags
 		 *	\return an object on which to run nearest neighbour queries */
-		static NearestNeighbourSearch* createBruteForce(const Matrix& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0);
+		static NearestNeighbourSearch* createBruteForce(const CloudType& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0);
 		
 		//! Create a nearest-neighbour search, using a kd-tree with linear heap, good for small k (~up to 30)
 		/*!	This is an helper function, you can also use create() with KDTREE_LINEAR_HEAP as preferedType
@@ -354,7 +374,7 @@ namespace Nabo
 		 *	\param creationOptionFlags creation options, a bitwise OR of elements of CreationOptionFlags
 		 *	\param additionalParameters additional parameters
 		 * 	\return an object on which to run nearest neighbour queries */
-		static NearestNeighbourSearch* createKDTreeLinearHeap(const Matrix& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters());
+		static NearestNeighbourSearch* createKDTreeLinearHeap(const CloudType& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters());
 		
 		//! Create a nearest-neighbour search, using a kd-tree with tree heap, good for large k (~from 30)
 		/*!	This is an helper function, you can also use create() with KDTREE_TREE_HEAP as preferedType
@@ -363,14 +383,52 @@ namespace Nabo
 		 *	\param creationOptionFlags creation options, a bitwise OR of elements of CreationOptionFlags
 		 *	\param additionalParameters additional parameters
 		 * 	\return an object on which to run nearest neighbour queries */
-		static NearestNeighbourSearch* createKDTreeTreeHeap(const Matrix& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters());
+		static NearestNeighbourSearch* createKDTreeTreeHeap(const CloudType& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters());
 		
+
+
+		//! Prevent creation of trees with the wrong matrix type. Currently only dynamic size matrices are supported.
+		template <typename WrongMatrixType>
+		static NearestNeighbourSearch* create(const WrongMatrixType& cloud, const Index dim = std::numeric_limits<Index>::max(), const SearchType preferedType = KDTREE_LINEAR_HEAP, const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters())
+		{
+		  typedef int Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef[sizeof(WrongMatrixType) > 0 ? -1 : 1];
+		  Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef dummy;
+		  return NULL;
+		}
+
+		//! Prevent creation of trees with the wrong matrix type. Currently only dynamic size matrices are supported.
+		template <typename WrongMatrixType>
+		static NearestNeighbourSearch* createBruteForce(const WrongMatrixType& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0)
+		{
+		  typedef int Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef[sizeof(WrongMatrixType) > 0 ? -1 : 1];
+		  Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef dummy;
+		  return NULL;
+		}
+
+		//! Prevent creation of trees with the wrong matrix type. Currently only dynamic size matrices are supported.
+		template <typename WrongMatrixType>
+		static NearestNeighbourSearch* createKDTreeLinearHeap(const WrongMatrixType& cloud, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters())
+		{
+		  typedef int Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef[sizeof(WrongMatrixType) > 0 ? -1 : 1];
+		  Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef dummy;
+		  return NULL;
+		}
+
+		//! Prevent creation of trees with the wrong matrix type. Currently only dynamic size matrices are supported.
+		template <typename WrongMatrixType>
+		static NearestNeighbourSearch* createKDTreeTreeHeap(const WrongMatrixType&, const Index dim = std::numeric_limits<Index>::max(), const unsigned creationOptionFlags = 0, const Parameters& additionalParameters = Parameters())
+		{
+		  typedef int Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef[sizeof(WrongMatrixType) > 0 ? -1 : 1];
+		  Please_make_sure_that_the_decltype_of_the_first_parameter_is_equal_to_the_Matrix_typedef dummy;
+		  return NULL;
+		}
+
 		//! virtual destructor
 		virtual ~NearestNeighbourSearch() {}
 		
 	protected:
 		//! constructor
-		NearestNeighbourSearch(const Matrix& cloud, const Index dim, const unsigned creationOptionFlags);
+		NearestNeighbourSearch(const CloudType& cloud, const Index dim, const unsigned creationOptionFlags);
 		
 		//! Make sure that the output matrices have the right sizes. Throw an exception otherwise.
 		/*!	\param query query points

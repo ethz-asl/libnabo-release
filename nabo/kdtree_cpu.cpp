@@ -37,9 +37,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <queue>
 #include <algorithm>
 #include <utility>
-#include <boost/numeric/conversion/bounds.hpp>
-#include <boost/limits.hpp>
-#include <boost/format.hpp>
 #ifdef HAVE_OPENMP
 #include <omp.h>
 #endif
@@ -76,8 +73,8 @@ namespace Nabo
 	/** \param v vector of positive values
 	 * \return index of maximum value, 0 if the vector is empty
 	 */
-	template<typename T>
-	size_t argMax(const typename NearestNeighbourSearch<T>::Vector& v)
+	template<typename T, typename CloudType>
+	size_t argMax(const typename NearestNeighbourSearch<T, CloudType>::Vector& v)
 	{
 		T maxVal(0);
 		size_t maxIdx(0);
@@ -93,11 +90,11 @@ namespace Nabo
 	}
 	
 	// OPT
-	template<typename T, typename Heap>
-	pair<T,T> KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::getBounds(const BuildPointsIt first, const BuildPointsIt last, const unsigned dim)
+	template<typename T, typename Heap, typename CloudType>
+	pair<T,T> KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::getBounds(const BuildPointsIt first, const BuildPointsIt last, const unsigned dim)
 	{
-		T minVal(boost::numeric::bounds<T>::highest());
-		T maxVal(boost::numeric::bounds<T>::lowest());
+		T minVal(std::numeric_limits<T>::max());
+		T maxVal(std::numeric_limits<T>::lowest());
 		
 		for (BuildPointsCstIt it(first); it != last; ++it)
 		{
@@ -109,8 +106,8 @@ namespace Nabo
 		return make_pair(minVal, maxVal);
 	}
 	
-	template<typename T, typename Heap>
-	unsigned KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::buildNodes(const BuildPointsIt first, const BuildPointsIt last, const Vector minValues, const Vector maxValues)
+	template<typename T, typename Heap, typename CloudType>
+	unsigned KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::buildNodes(const BuildPointsIt first, const BuildPointsIt last, const Vector minValues, const Vector maxValues)
 	{
 		const int count(last - first);
 		assert(count >= 1);
@@ -134,7 +131,7 @@ namespace Nabo
 		}
 		
 		// find the largest dimension of the box
-		const unsigned cutDim = argMax<T>(maxValues - minValues);
+		const unsigned cutDim = argMax<T, CloudType>(maxValues - minValues);
 		const T idealCutVal((maxValues(cutDim) + minValues(cutDim))/2);
 		
 		// get bounds from actual points
@@ -227,15 +224,15 @@ namespace Nabo
 		return pos;
 	}
 
-	template<typename T, typename Heap>
-	KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt(const Matrix& cloud, const Index dim, const unsigned creationOptionFlags, const Parameters& additionalParameters):
-		NearestNeighbourSearch<T>::NearestNeighbourSearch(cloud, dim, creationOptionFlags),
+	template<typename T, typename Heap, typename CloudType>
+	KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt(const CloudType& cloud, const Index dim, const unsigned creationOptionFlags, const Parameters& additionalParameters):
+		NearestNeighbourSearch<T, CloudType>::NearestNeighbourSearch(cloud, dim, creationOptionFlags),
 		bucketSize(additionalParameters.get<unsigned>("bucketSize", 8)),
 		dimBitCount(getStorageBitCount<uint32_t>(this->dim)),
 		dimMask((1<<dimBitCount)-1)
 	{
 		if (bucketSize < 2)
-			throw runtime_error((boost::format("Requested bucket size %1%, but must be larger than 2") % bucketSize).str());
+			throw runtime_error("Requested bucket size " + std::to_string(bucketSize) + ", but must be larger than 2");
 		if (cloud.cols() <= bucketSize)
 		{
 			// make a single-bucket tree
@@ -249,7 +246,8 @@ namespace Nabo
 		const uint64_t estimatedNodeCount(cloud.cols() / (bucketSize / 2));
 		if (estimatedNodeCount > maxNodeCount)
 		{
-			throw runtime_error((boost::format("Cloud has a risk to have more nodes (%1%) than the kd-tree allows (%2%). The kd-tree has %3% bits for dimensions and %4% bits for node indices") % estimatedNodeCount % maxNodeCount % dimBitCount % (32-dimBitCount)).str());
+			throw runtime_error("Cloud has a risk to have more nodes (" + std::to_string(estimatedNodeCount) + ") than the kd-tree allows (" + std::to_string(maxNodeCount) + "). "
+					"The kd-tree has " + std::to_string(dimBitCount) + " bits for dimensions and " + std::to_string((32-dimBitCount)) + " bits for node indices");
 		}
 		
 		// build point vector and compute bounds
@@ -273,8 +271,8 @@ namespace Nabo
 		buildPoints.clear();
 	}
 	
-	template<typename T, typename Heap>
-	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::knn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, const Index k, const T epsilon, const unsigned optionFlags, const T maxRadius) const
+	template<typename T, typename Heap, typename CloudType>
+	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::knn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, const Index k, const T epsilon, const unsigned optionFlags, const T maxRadius) const
 	{
 		checkSizesKnn(query, indices, dists2, k, optionFlags);
 		
@@ -305,8 +303,8 @@ namespace Nabo
 		return leafTouchedCount;
 	}
 	
-	template<typename T, typename Heap>
-	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::knn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, const Vector& maxRadii, const Index k, const T epsilon, const unsigned optionFlags) const
+	template<typename T, typename Heap, typename CloudType>
+	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::knn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, const Vector& maxRadii, const Index k, const T epsilon, const unsigned optionFlags) const
 	{
 		checkSizesKnn(query, indices, dists2, k, optionFlags, &maxRadii);
 		
@@ -337,10 +335,10 @@ namespace Nabo
 		return leafTouchedCount;
 	}
 	
-	template<typename T, typename Heap>
-	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::onePointKnn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, int i, Heap& heap, std::vector<T>& off, const T maxError2, const T maxRadius2, const bool allowSelfMatch, const bool collectStatistics, const bool sortResults) const
+	template<typename T, typename Heap, typename CloudType>
+	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::onePointKnn(const Matrix& query, IndexMatrix& indices, Matrix& dists2, int i, Heap& heap, std::vector<T>& off, const T maxError2, const T maxRadius2, const bool allowSelfMatch, const bool collectStatistics, const bool sortResults) const
 	{
-		fill(off.begin(), off.end(), 0);
+		fill(off.begin(), off.end(), static_cast<T>(0));
 		heap.reset();
 		unsigned long leafTouchedCount(0);
 		
@@ -366,8 +364,8 @@ namespace Nabo
 		return leafTouchedCount;
 	}
 	
-	template<typename T, typename Heap> template<bool allowSelfMatch, bool collectStatistics>
-	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap>::recurseKnn(const T* query, const unsigned n, T rd, Heap& heap, std::vector<T>& off, const T maxError2, const T maxRadius2) const
+	template<typename T, typename Heap, typename CloudType> template<bool allowSelfMatch, bool collectStatistics>
+	unsigned long KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<T, Heap, CloudType>::recurseKnn(const T* query, const unsigned n, T rd, Heap& heap, std::vector<T>& off, const T maxError2, const T maxRadius2) const
 	{
 		const Node& node(nodes[n]);
 		const uint32_t cd(getDim(node.dimChildBucketSize));
@@ -453,5 +451,16 @@ namespace Nabo
 	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<double,IndexHeapSTL<int,double> >;
 	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<double,IndexHeapBruteForceVector<int,double> >;
 	
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<float,IndexHeapSTL<int,float>,Eigen::Matrix3Xf>;
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<float,IndexHeapBruteForceVector<int,float>,Eigen::Matrix3Xf>;
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<double,IndexHeapSTL<int,double>,Eigen::Matrix3Xd>;
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<double,IndexHeapBruteForceVector<int,double>,Eigen::Matrix3Xd>;
+
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<float,IndexHeapSTL<int,float>,Eigen::Map<const Eigen::Matrix3Xf, Eigen::Aligned> >;
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<float,IndexHeapBruteForceVector<int,float>,Eigen::Map<const Eigen::Matrix3Xf, Eigen::Aligned> >;
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<double,IndexHeapSTL<int,double>,Eigen::Map<const Eigen::Matrix3Xd, Eigen::Aligned> >;
+	template struct KDTreeUnbalancedPtInLeavesImplicitBoundsStackOpt<double,IndexHeapBruteForceVector<int,double>,Eigen::Map<const Eigen::Matrix3Xd, Eigen::Aligned> >;
+
 	//@}
 }
+/* vim: set ts=8 sw=8 tw=0 noexpandtab cindent softtabstop=8 :*/

@@ -43,9 +43,6 @@ void doTestEpsilon(const char *fileName, const int K, const int method, const in
 {
 	typedef Nabo::NearestNeighbourSearch<T> NNS;
 	typedef typename NNS::Matrix Matrix;
-	typedef typename NNS::Vector Vector;
-	typedef typename NNS::Index Index;
-	typedef typename NNS::IndexVector IndexVector;
 	typedef typename NNS::IndexMatrix IndexMatrix;
 	
 	// check if file is ok
@@ -72,7 +69,7 @@ void doTestEpsilon(const char *fileName, const int K, const int method, const in
 		double duration(0);
 		for (int s = 0; s < searchCount; ++s)
 		{
-			boost::timer t;
+			timer t;
 			nns->knn(q, indexes_bf, dists2_bf, K, 0, NNS::ALLOW_SELF_MATCH);
 			duration += t.elapsed();
 		}
